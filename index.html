@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+
+<head>
+
+</head>
+
+<body>
+    <canvas id="game"></canvas>
+</body>
+<script>
+    class GameWindow {
+
+        WINDOW_WIDTH = 400;
+        WINDOW_HEIGHT = this.WINDOW_WIDTH;
+        WINDOW_BORDER_COLOR = "black";
+        WINDOW_BACKGROUND_COLOR = "white";
+        WINDOW_PAUSED_BACKGROUND_COLOR = "grey";
+
+        constructor(windowElement) {
+            this.windowElement = windowElement;
+            this.init();
+            this.drawBorder();
+        }
+
+        init() {
+            this.windowElement.width = this.WINDOW_WIDTH;
+            this.windowElement.height = this.WINDOW_HEIGHT;
+
+            this.backgroundColor = this.WINDOW_BACKGROUND_COLOR;
+        }
+
+        drawBorder() {
+            let context = this.getContext();
+            context.strokeStyle = this.WINDOW_BORDER_COLOR;
+            context.strokeRect(0, 0, this.WINDOW_WIDTH, this.WINDOW_HEIGHT);
+        }
+
+        clear() {
+            let context = this.getContext();
+            context.fillStyle = this.backgroundColor;
+            context.fillRect(0, 0, this.WINDOW_WIDTH, this.WINDOW_HEIGHT);
+            this.drawBorder();
+        }
+
+        start() {
+            this.backgroundColor = this.WINDOW_BACKGROUND_COLOR;
+        }
+
+        stop() {
+            this.backgroundColor = this.WINDOW_PAUSED_BACKGROUND_COLOR;
+        }
+
+        render() {
+            this.clear();
+        }
+
+        getContext() {
+            return this.windowElement.getContext("2d");
+        }
+    }
+
+    class Game {
+        constructor(gameWindow) {
+            this.gameWindow = gameWindow;
+            this.running = false;
+            this.stopping = false;
+
+            this.players = [];
+            this.handlers = [];
+
+            this.handlers.push(gameWindow);
+
+            this.keyHandler = new KeyHandler();
+            this.keyHandler.addSubscriber(this);
+            this.handlers.push(this.keyHandler);
+
+            this.tickHandler = new TickHandler();
+            this.tickHandler.addSubscriber(this);
+            this.handlers.push(this.tickHandler);
+
+            this.renderHandler = new RenderHandler();
+            this.renderHandler.addSubscriber(this);
+            this.handlers.push(this.renderHandler);
+        }
+
+        start() {
+            this.starting = true;
+            this.handlers.forEach(handler => {
+                handler.start();
+            });
+            this.running = true;
+            console.log("Game starting");
+        }
+
+        stop() {
+            if (!this.stopping) {
+                this.stopping = true;
+                this.handlers.forEach(handler => {
+                    handler.stop();
+                });
+                this.running = false;
+                console.log("Game stopping");
+                this.render();
+            }
+        }
+
+        tickUpdate() {
+            if (!this.starting && !this.stopping) {
+                this.players.forEach(player => {
+                    player.tickUpdate();
+                });
+            }
+        }
+
+        keyUpdate(keyHandler) {
+            if (keyHandler.escapeKeyPressed) {
+                if (this.running) {
+                    if (!this.stopping && !this.starting) {
+                        this.stop();
+                    }
+                } else {
+                    if (!this.stopping) {
+                        this.start();
+                    }
+                }
+            } else {
+                this.stopping = false;
+                this.starting = false;
+                this.players.forEach(player => {
+                    player.keyUpdate(keyHandler);
+                });
+            }
+        }
+
+        render() {
+            let context = this.gameWindow.getContext();
+            this.gameWindow.render();
+            this.players.forEach(player => {
+                player.render(context);
+            });
+        }
+
+        addPlayer(player) {
+            this.players.push(player);
+        }
+
+        removePlayer(player) {
+            this.players.filter(p => {
+                return p !== player;
+            });
+        }
+    }
+
+    class Player {
+
+        PLAYER_OUTLINE_COLOR = "#000000";
+        PLAYER_FILL_COLOR = "#61ef66";
+        PLAYER_RADIUS = 20;
+
+        constructor(x, y) {
+            this.px = x;
+            this.py = y;
+            this.vx = 0;
+            this.vy = 0;
+
+            this.pxMax = 0;
+            this.pxMin = 0;
+            this.pyMax = 0;
+            this.pyMin = 0;
+
+            this.alive = true;
+
+            this.vxMax = 50;
+            this.vxMin = -this.vxMax;
+            this.vyMax = -50;
+            this.vyMin = 100;
+
+            this.friction = 0.92;
+            this.acceleration = 4;
+            this.gravity = 1;
+
+            this.jumping = false;
+            this.maxJumpTime = 30;
+            this.jumpTime = 0;
+            this.jumpAcceleration = 5;
+            this.bounceFactor = 0.5;
+
+            this.speedFactor = 0.05;
+
+            this.debug();
+        }
+
+        debug() {
+            this.vxMax = 50;
+            this.vxMin = -this.vxMax;
+            this.vyMax = -50;
+            this.vyMin = 100;
+
+            this.friction = 0.92;
+            this.acceleration = 4;
+            this.gravity = 1;
+
+            this.jumping = false;
+            this.maxJumpTime = 30;
+            this.jumpTime = 0;
+            this.jumpAcceleration = 5;
+            this.bounceFactor = 0.5;
+
+            this.speedFactor = 0.05;
+        }
+
+        addTo(game) {
+            game.addPlayer(player);
+            this.game = game;
+            this.setBounds();
+        }
+
+        removeFrom(game) {
+            game.removePlayer(player);
+            this.game = undefined;
+        }
+
+        setBounds() {
+            this.pxMax = this.game.gameWindow.WINDOW_WIDTH - this.PLAYER_RADIUS - 2;
+            this.pxMin = this.PLAYER_RADIUS + 2;
+            this.pyMax = this.game.gameWindow.WINDOW_HEIGHT - this.PLAYER_RADIUS - 2;
+            this.pyMin = this.PLAYER_RADIUS + 2;
+        }
+
+        move() {
+            this.px += this.vx * this.speedFactor;
+            this.py += this.vy * this.speedFactor;
+
+            this.checkBounds();
+        }
+
+        clampSpeed() {
+            this.vx = Math.max(Math.min(this.vxMax, this.vx), this.vxMin);
+            this.vy = Math.max(Math.min(this.vyMin, this.vy), this.vyMax);
+        }
+
+        checkBounds() {
+            if (this.alive && (this.px < this.pxMin || this.px > this.pxMax || this.py < this.pyMin || this.py > this.pyMax)) {
+                this.alive = false;
+                setInterval(() => { this.PLAYER_RADIUS++; }, 1);
+            }
+            this.px = Math.max(Math.min(this.pxMax, this.px), this.pxMin);
+            this.py = Math.max(Math.min(this.pyMax, this.py), this.pyMin);
+        }
+
+        keyUpdate(keyHandler) {
+            if (keyHandler.leftKeyPressed === keyHandler.rightKeyPressed) {
+                if (this.vx > 0.1 || this.vx < -0.1) {
+                    this.vx *= this.friction;
+                } else {
+                    this.vx = 0;
+                }
+            } else if (keyHandler.leftKeyPressed) {
+                this.vx -= this.acceleration;
+            } else if (keyHandler.rightKeyPressed) {
+                this.vx += this.acceleration;
+            }
+
+            this.jumping = keyHandler.spaceKeyPressed;
+            if (this.jumping) {
+                if (this.jumpTime < this.maxJumpTime) {
+                    this.vy -= this.jumpAcceleration;
+                } else {
+                    this.vy += this.gravity;
+                }
+                this.jumpTime += 1;
+            } else {
+                this.vy += this.gravity;
+                this.jumpTime = 0;
+            }
+
+            if (this.py >= 300 && this.vy > 0) {
+                this.vy *= -this.bounceFactor;
+            }
+
+            // console.log(this.vx);
+            // console.log(this.vy);
+            // console.log(this.jumpTime);
+
+            this.clampSpeed();
+        }
+
+        tickUpdate() {
+            this.move();
+        }
+
+        preRender(context) {
+            context.strokeStyle = this.PLAYER_OUTLINE_COLOR;
+            context.fillStyle = this.PLAYER_FILL_COLOR;
+        }
+
+        render(context) {
+            this.preRender(context);
+            context.beginPath();
+            context.arc(this.px, this.py, this.PLAYER_RADIUS, 0, 2 * Math.PI);
+            context.stroke();
+            context.fill();
+
+            // console.log("Drawing player at " + this.px + ", " + this.py);
+        }
+    }
+
+    class UpdateHandler {
+
+        TPS = 20;
+
+        constructor() {
+            this.subscribers = [];
+        }
+
+        addSubscriber(subscriber) {
+            this.subscribers.push(subscriber);
+        }
+
+        removeSubscriber(subscriber) {
+            this.subscribers.filter(s => {
+                return s !== subscriber;
+            });
+        }
+
+        start() {
+            this.intervalID = setInterval(this.update.bind(this), 1000 / this.TPS);
+        }
+
+        stop() {
+            clearInterval(this.intervalID);
+        }
+
+        update() {
+            // override
+        }
+    }
+
+    // KeyHandler needs to be running at all times, even when the game is paused
+    // - Init timer in constructor
+    // - Override start/stop to do nothing
+    class KeyHandler extends UpdateHandler {
+
+        TPS = 200.0;
+
+        constructor() {
+            super();
+
+            this.leftKeyPressed = false;
+            this.rightKeyPressed = false;
+            this.upKeyPressed = false;
+            this.downKeyPressed = false;
+            this.spaceKeyPressed = false;
+            this.escapeKeyPressed = false;
+
+            this.registerKeyHandlers();
+            this.intervalID = setInterval(this.update.bind(this), 1000 / this.TPS);
+        }
+
+        start() {}
+        stop() {}
+
+        update() {
+            this.subscribers.forEach(subscriber => {
+                subscriber.keyUpdate(this);
+            });
+            // console.log("KeyHandler update");
+        }
+
+        registerKeyHandlers() {
+            if (!this.registered) {
+                document.addEventListener("keydown", this.keydown.bind(this), true);
+                document.addEventListener("keyup", this.keyup.bind(this), true);
+                this.registered = true;
+            }
+        }
+
+        deregisterKeyHandlers() {
+            if (this.registered) {
+                document.removeEventListener("keydown", this.keydown, true);
+                document.removeEventListener("keyup", this.keyup, true);
+                this.registered = false;
+            }
+        }
+
+        keydown(event) {
+            if (event.keyCode === 65) {
+                this.leftKeyPressed = true;
+            } else if (event.keyCode === 68) {
+                this.rightKeyPressed = true;
+            } else if (event.keyCode === 87) {
+                this.upKeyPressed = true;
+            } else if (event.keyCode === 83) {
+                this.downKeyPressed = true;
+            } else if (event.keyCode === 32) {
+                this.spaceKeyPressed = true;
+            } else if (event.keyCode === 27) {
+                this.escapeKeyPressed = true;
+            }
+        }
+
+        keyup(event) {
+            if (event.keyCode === 65) {
+                this.leftKeyPressed = false;
+            } else if (event.keyCode === 68) {
+                this.rightKeyPressed = false;
+            } else if (event.keyCode === 87) {
+                this.upKeyPressed = false;
+            } else if (event.keyCode === 83) {
+                this.downKeyPressed = false;
+            } else if (event.keyCode === 32) {
+                this.spaceKeyPressed = false;
+            } else if (event.keyCode === 27) {
+                this.escapeKeyPressed = false;
+            }
+        }
+    }
+
+    class TickHandler extends UpdateHandler {
+
+        TPS = 200.0;
+
+        update() {
+            this.subscribers.forEach(subscriber => {
+                subscriber.tickUpdate(this);
+            });
+            // console.log("TickHandler update");
+        }
+    }
+
+    class RenderHandler extends UpdateHandler {
+
+        TPS = 200.0;
+
+        update() {
+            this.subscribers.forEach(subscriber => {
+                subscriber.render(this);
+            });
+            // console.log("RenderHandler update");
+        }
+    }
+
+    let windowElement = document.getElementById("game");
+
+    let gameWindow = new GameWindow(windowElement);
+    let game = new Game(gameWindow);
+    let player = new Player(50, 50);
+    player.addTo(game);
+    game.start();
+</script>
