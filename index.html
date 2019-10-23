@@ -151,12 +151,7 @@
         }
     }
 
-    class Player {
-
-        PLAYER_OUTLINE_COLOR = "#000000";
-        PLAYER_FILL_COLOR = "#61ef66";
-        PLAYER_RADIUS = 20;
-
+    class Object2D {
         constructor(x, y) {
             this.px = x;
             this.py = y;
@@ -167,7 +162,72 @@
             this.pxMin = 0;
             this.pyMax = 0;
             this.pyMin = 0;
+        }
 
+        addTo(game) {
+            game.addPlayer(player);
+            this.game = game;
+            this.setBounds();
+        }
+
+        removeFrom(game) {
+            game.removePlayer(player);
+            this.game = undefined;
+        }
+
+        setBounds() {
+            this.pxMax = this.game.gameWindow.WINDOW_WIDTH - this.getXRadius() - 2;
+            this.pxMin = this.getXRadius() + 2;
+            this.pyMax = this.game.gameWindow.WINDOW_HEIGHT - this.getYRadius() - 2;
+            this.pyMin = this.getYRadius() + 2;
+        }
+
+        getXRadius() {
+            return this.PLAYER_RADIUS_X;
+        }
+
+        getYRadius() {
+            return this.PLAYER_RADIUS_Y;
+        }
+
+        move() {
+            this.px += this.vx * this.speedFactor;
+            this.py += this.vy * this.speedFactor;
+
+            this.checkBounds();
+        }
+
+        clampSpeed() {
+            this.vx = Math.max(Math.min(this.vxMax, this.vx), this.vxMin);
+            this.vy = Math.max(Math.min(this.vyMin, this.vy), this.vyMax);
+        }
+
+        checkBounds() {
+            this.px = Math.max(Math.min(this.pxMax, this.px), this.pxMin);
+            this.py = Math.max(Math.min(this.pyMax, this.py), this.pyMin);
+        }
+
+        tickUpdate() {}
+
+        preRender(context) {}
+
+        render(context) {}
+    }
+
+    class Player extends Object2D {
+
+        PLAYER_OUTLINE_COLOR = "#000000";
+        PLAYER_FILL_COLOR = "#61ef66";
+        PLAYER_RADIUS_X = 20;
+        PLAYER_RADIUS_Y = 20;
+
+        constructor(x, y) {
+            super(x, y);
+
+            this.setPhysicsConstants();
+        }
+
+        setPhysicsConstants() {
             this.vxMax = 50;
             this.vxMin = -this.vxMax;
             this.vyMax = -50;
@@ -205,41 +265,6 @@
             this.bounceFactor = 0.5;
 
             this.speedFactor = 0.05;
-        }
-
-        addTo(game) {
-            game.addPlayer(player);
-            this.game = game;
-            this.setBounds();
-        }
-
-        removeFrom(game) {
-            game.removePlayer(player);
-            this.game = undefined;
-        }
-
-        setBounds() {
-            this.pxMax = this.game.gameWindow.WINDOW_WIDTH - this.PLAYER_RADIUS - 2;
-            this.pxMin = this.PLAYER_RADIUS + 2;
-            this.pyMax = this.game.gameWindow.WINDOW_HEIGHT - this.PLAYER_RADIUS - 2;
-            this.pyMin = this.PLAYER_RADIUS + 2;
-        }
-
-        move() {
-            this.px += this.vx * this.speedFactor;
-            this.py += this.vy * this.speedFactor;
-
-            this.checkBounds();
-        }
-
-        clampSpeed() {
-            this.vx = Math.max(Math.min(this.vxMax, this.vx), this.vxMin);
-            this.vy = Math.max(Math.min(this.vyMin, this.vy), this.vyMax);
-        }
-
-        checkBounds() {
-            this.px = Math.max(Math.min(this.pxMax, this.px), this.pxMin);
-            this.py = Math.max(Math.min(this.pyMax, this.py), this.pyMin);
         }
 
         keyUpdate(keyHandler) {
@@ -291,7 +316,7 @@
         render(context) {
             this.preRender(context);
             context.beginPath();
-            context.arc(this.px, this.py, this.PLAYER_RADIUS, 0, 2 * Math.PI);
+            context.ellipse(this.px, this.py, this.PLAYER_RADIUS_X, this.PLAYER_RADIUS_Y, 0, 0, 2 * Math.PI);
             context.stroke();
             context.fill();
 
