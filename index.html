@@ -168,8 +168,6 @@
             this.pyMax = 0;
             this.pyMin = 0;
 
-            this.alive = true;
-
             this.vxMax = 50;
             this.vxMin = -this.vxMax;
             this.vyMax = -50;
@@ -240,10 +238,6 @@
         }
 
         checkBounds() {
-            if (this.alive && (this.px < this.pxMin || this.px > this.pxMax || this.py < this.pyMin || this.py > this.pyMax)) {
-                this.alive = false;
-                setInterval(() => { this.PLAYER_RADIUS++; }, 1);
-            }
             this.px = Math.max(Math.min(this.pxMax, this.px), this.pxMin);
             this.py = Math.max(Math.min(this.pyMax, this.py), this.pyMin);
         }
